@@ -167,11 +167,12 @@ export async function processDocument(
         data: {
           status: "COMPLETED",
           summary: analysis.summary,
-          pros: analysis.pros,
-          cons: analysis.cons,
+          // JSON roundtrip satisfies Prisma's strict InputJsonValue constraint
+          pros: JSON.parse(JSON.stringify(analysis.pros)),
+          cons: JSON.parse(JSON.stringify(analysis.cons)),
           riskScore: score,
           riskLevel: level as RiskLevel,
-          overallAnalysis: analysis as unknown as Record<string, unknown>,
+          overallAnalysis: JSON.parse(JSON.stringify(analysis)),
         },
       });
     });
@@ -199,7 +200,7 @@ export async function processDocument(
         data: {
           status: "FAILED",
           // Store error in overallAnalysis for debugging
-          overallAnalysis: { error: message } as unknown as Record<string, unknown>,
+          overallAnalysis: JSON.parse(JSON.stringify({ error: message })),
         },
       });
     } catch (dbErr) {
