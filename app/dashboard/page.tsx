@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { SignOutButton } from "@/components/sign-out-button";
-import { Upload, ShieldCheck, Coins } from "lucide-react";
+import { ShieldCheck, Coins } from "lucide-react";
 import Image from "next/image";
+import { UploadDocument } from "@/components/upload-document";
 
 const ROLE_STYLES: Record<string, string> = {
   ADMIN: "bg-red-500/15 text-red-400 border-red-500/20",
@@ -97,26 +98,13 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Upload CTA */}
-        <div className="rounded-2xl border border-dashed border-violet-500/30 bg-violet-500/5 p-12 text-center">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-600/20">
-            <Upload className="h-7 w-7 text-violet-400" />
-          </div>
-          <h2 className="mb-2 text-xl font-semibold">Upload a Contract</h2>
-          <p className="mx-auto mb-6 max-w-sm text-sm text-white/50">
-            Drop your PDF or Word document to get an instant AI risk analysis,
-            pros &amp; cons breakdown, and chat access.
+        {/* Upload */}
+        <div className="rounded-2xl border border-white/8 bg-white/3 p-6">
+          <h2 className="mb-1 text-lg font-semibold">Upload a Contract</h2>
+          <p className="mb-6 text-sm text-white/50">
+            PDF or Word document · Get an AI risk analysis, pros &amp; cons breakdown, and chat access.
           </p>
-          <button
-            disabled
-            className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white opacity-60"
-          >
-            <Upload className="h-4 w-4" />
-            Upload Document
-            <span className="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-xs">
-              Coming soon
-            </span>
-          </button>
+          <UploadDocument role={user.role} />
         </div>
       </main>
     </div>
