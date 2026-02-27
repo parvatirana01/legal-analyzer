@@ -179,8 +179,7 @@ export function UploadDocument({ role = "GUEST" }: UploadDocumentProps) {
             <button
               className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-violet-500 active:scale-95"
               onClick={() => {
-                // Navigate to analysis page when implemented
-                window.location.href = `/dashboard/documents/${state.phase === "success" ? state.documentId : ""}`;
+                window.location.href = `/documents/${state.phase === "success" ? state.documentId : ""}`;
               }}
             >
               Start Analysis
@@ -210,7 +209,7 @@ export function UploadDocument({ role = "GUEST" }: UploadDocumentProps) {
             <button
               className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-amber-500"
               onClick={() => {
-                window.location.href = `/dashboard/documents/${state.documentId}`;
+                window.location.href = `/documents/${state.documentId}`;
               }}
             >
               Open Existing

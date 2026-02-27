@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { uploadToR2, buildR2Key } from "@/lib/r2";
 import { validateFile, MIME_TO_EXTENSION } from "@/lib/file-validation";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { processDocument } from "@/lib/process-document";
 import type { UserRole } from "@/lib/generated/prisma/enums";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -138,7 +139,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       },
     });
 
-    // ── 10. Build response — set guest cookie if needed ───────────────────────
+    // ── 10. Trigger background AI processing (non-blocking) ───────────────────
+    processDocument(docId).catch((err: unknown) => {
+      console.error("[upload] Background processing error:", err);
+    });
+
+    // ── 11. Build response — set guest cookie if needed ───────────────────────
     const responseBody = {
       success: true,
       documentId: document.id,
