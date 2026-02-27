@@ -1,0 +1,195 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../lib/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [pgvector(map: "vector")]
+}
+
+//////////////////////////////////////
+// ENUMS
+//////////////////////////////////////
+
+enum UserRole {
+  GUEST
+  USER
+  SUBSCRIBER
+  ADMIN
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+//////////////////////////////////////
+// USER
+//////////////////////////////////////
+
+model User {
+  id                 String         @id @default(uuid())
+  email              String?        @unique
+  name               String?
+  image              String?
+  role               UserRole       @default(USER)
+
+  tokensRemaining    Int            @default(3)
+  tokensResetDate    DateTime?
+
+  subscription       Subscription?
+  documents          Document[]
+  tokenTransactions  TokenTransaction[]
+
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+}
+
+//////////////////////////////////////
+// SUBSCRIPTION
+//////////////////////////////////////
+
+model Subscription {
+  id            String            @id @default(uuid())
+  userId        String            @unique
+  plan          SubscriptionPlan  @default(FREE)
+  active        Boolean           @default(false)
+  startDate     DateTime?
+  endDate       DateTime?
+
+  stripeSubId   String?           // if using Stripe later
+
+  user          User              @relation(fields: [userId], references: [id])
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+//////////////////////////////////////
+// DOCUMENT
+//////////////////////////////////////
+
+model Document {
+  id               String          @id @default(uuid())
+  userId           String?
+  guestSessionId   String?         // for non-logged users
+
+  fileName         String
+  fileUrl          String
+  fileSize         Int?
+
+  status           DocumentStatus  @default(UPLOADED)
+
+  riskScore        Int?
+  riskLevel        RiskLevel?
+
+  summary          String?
+  pros             Json?
+  cons             Json?
+
+  overallAnalysis  Json?           // structured AI response
+
+  user             User?           @relation(fields: [userId], references: [id])
+  clauses          Clause[]
+  chats            ChatMessage[]
+  embeddings       DocumentEmbedding[]
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+//////////////////////////////////////
+// CLAUSE BREAKDOWN
+//////////////////////////////////////
+
+model Clause {
+  id          String     @id @default(uuid())
+  documentId  String
+
+  title       String?
+  content     String
+  riskLevel   RiskLevel?
+  explanation String?
+  suggestion  String?
+
+  document    Document   @relation(fields: [documentId], references: [id])
+
+  createdAt   DateTime   @default(now())
+}
+
+//////////////////////////////////////
+// DOCUMENT EMBEDDINGS (pgvector)
+//////////////////////////////////////
+
+model DocumentEmbedding {
+  id          String   @id @default(uuid())
+  documentId  String
+  content     String
+
+  embedding   Unsupported("vector")?
+
+  document    Document @relation(fields: [documentId], references: [id])
+
+  createdAt   DateTime @default(now())
+}
+
+//////////////////////////////////////
+// CHAT SYSTEM
+//////////////////////////////////////
+
+model ChatMessage {
+  id          String    @id @default(uuid())
+  documentId  String
+
+  role        ChatRole
+  content     String
+
+  document    Document  @relation(fields: [documentId], references: [id])
+
+  createdAt   DateTime  @default(now())
+}
+
+//////////////////////////////////////
+// TOKEN TRANSACTION LOG
+//////////////////////////////////////
+
+model TokenTransaction {
+  id          String   @id @default(uuid())
+  userId      String
+
+  amount      Int      // -1 for usage, +3 for monthly reset etc
+  reason      String   // "DOCUMENT_UPLOAD", "MONTHLY_RESET"
+  
+  user        User     @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+}
+
+
