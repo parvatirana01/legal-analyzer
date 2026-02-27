@@ -116,6 +116,8 @@ model Document {
 
   overallAnalysis  Json?           // structured AI response
 
+  fileChecksum     String?         // SHA-256 hex for duplicate detection
+
   user             User?           @relation(fields: [userId], references: [id])
   clauses          Clause[]
   chats            ChatMessage[]
