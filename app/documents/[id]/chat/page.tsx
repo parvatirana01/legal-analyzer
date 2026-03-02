@@ -5,8 +5,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 import { Navbar } from "@/components/navbar";
-import { ChatPanel } from "@/components/ChatPanel";
-import { PdfViewerClient } from "@/components/PdfViewerClient";
+import { ChatPanel } from "./_components/chat-panel";
+import { PdfViewerClient } from "./_components/pdf-viewer-client";
 import { ArrowLeft, FileText, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

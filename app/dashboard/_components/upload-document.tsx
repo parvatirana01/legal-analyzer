@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   FileText,
   FileType,
@@ -13,6 +14,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { formatFileSize, MAX_FILE_SIZE_LABEL } from "@/lib/file-validation";
+import { queryKeys } from "@/api/queries";
 import type { UserRole } from "@/lib/generated/prisma/enums";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -41,6 +43,7 @@ const ACCEPTED_EXTENSIONS = ".pdf,.doc,.docx";
 
 export function UploadDocument({ role = "GUEST" }: UploadDocumentProps) {
   const router = useRouter();
+  const qc = useQueryClient();
   const [state, setState] = useState<UploadState>({ phase: "idle" });
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +140,11 @@ export function UploadDocument({ role = "GUEST" }: UploadDocumentProps) {
           fileName: data.fileName ?? file.name,
           fileSize: data.fileSize ?? file.size,
         });
+
+        // Token was deducted server-side for USER-role accounts.
+        // Invalidate the user cache so the Navbar immediately refetches
+        // and displays the updated token count without a page reload.
+        void qc.invalidateQueries({ queryKey: queryKeys.user.me() });
       } catch {
         setState({ phase: "error", message: "Unexpected server response." });
       }
@@ -302,7 +310,7 @@ export function UploadDocument({ role = "GUEST" }: UploadDocumentProps) {
             ) : (
               <div>
                 <p className="font-medium text-white/80">
-                  Drag & drop your contract
+                  Drag &amp; drop your contract
                 </p>
                 <p className="mt-1 text-sm text-white/40">
                   or <span className="text-violet-400">browse files</span>

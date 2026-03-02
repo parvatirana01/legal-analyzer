@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Coins, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import Image from "next/image";
+import { useCurrentUser } from "@/api/queries";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,14 +25,11 @@ export interface Breadcrumb {
 interface NavbarProps {
   /**
    * User data pre-fetched by a Server Component.
-   * When provided, the navbar skips the /api/user/me fetch on mount.
+   * Used as placeholder data so the token count renders immediately
+   * on page load without waiting for the client-side fetch.
+   * TanStack Query will replace it with live data in the background.
    */
   initialUser?: NavbarUser | null;
-  /**
-   * Overrides the token count for real-time updates (e.g. after re-analyze)
-   * without triggering a full re-fetch.
-   */
-  tokensOverride?: number | null;
   breadcrumbs?: Breadcrumb[];
 }
 
@@ -69,40 +67,31 @@ const ROLE_PILL: Record<string, string> = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function Navbar({
-  initialUser,
-  tokensOverride,
-  breadcrumbs = [],
-}: NavbarProps) {
+export function Navbar({ initialUser, breadcrumbs = [] }: NavbarProps) {
   const router = useRouter();
-  const [user, setUser] = useState<NavbarUser | null>(initialUser ?? null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Effective token count: override > fetched user > null
-  const tokens =
-    tokensOverride !== undefined && tokensOverride !== null
-      ? tokensOverride
-      : (user?.tokensRemaining ?? null);
+  /**
+   * useCurrentUser is subscribed to the shared TanStack Query cache.
+   * Any mutation that calls `qc.invalidateQueries({ queryKey: queryKeys.user.me() })`
+   * (e.g. upload, re-analyze) will trigger an automatic refetch here, so the
+   * token count updates in real-time without a page reload.
+   *
+   * initialUser (from SSR) is passed as placeholderData so the token count
+   * renders immediately on first paint instead of flickering from undefined.
+   */
+  const { data: user } = useCurrentUser({
+    placeholderData: initialUser ?? undefined,
+  });
 
-  // Fetch user data if not supplied by SSR (client-side pages)
-  useEffect(() => {
-    if (initialUser !== undefined) return; // SSR data provided — trust it
-    fetch("/api/user/me")
-      .then((r) => r.json())
-      .then((data: { user?: NavbarUser }) => {
-        if (data.user) setUser(data.user);
-      })
-      .catch(() => {});
-  }, [initialUser]);
+  const tokens = user?.tokensRemaining ?? null;
+  const tokStyle = tokens !== null ? tokenStyle(tokens) : null;
+  const rolePill = ROLE_PILL[user?.role ?? "USER"] ?? ROLE_PILL["USER"];
 
   const handleSignOut = async () => {
     const { signOut } = await import("next-auth/react");
     await signOut({ callbackUrl: "/" });
   };
-
-  const tokStyle = tokens !== null ? tokenStyle(tokens) : null;
-  const rolePill =
-    ROLE_PILL[user?.role ?? "USER"] ?? ROLE_PILL["USER"];
 
   return (
     <header className="sticky top-0 z-20 border-b border-white/5 bg-[#0a0a0f]/90 backdrop-blur-md">
@@ -290,4 +279,3 @@ export function Navbar({
     </header>
   );
 }
-
