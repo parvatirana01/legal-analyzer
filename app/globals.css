@@ -124,3 +124,42 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── Landing page custom animations ───────────────────────────────────────── */
+
+@keyframes float {
+  0%, 100% { transform: rotate(-1.5deg) translateY(0px); }
+  50%       { transform: rotate(-1.5deg) translateY(-14px); }
+}
+
+@keyframes scan-beam {
+  0%   { top: 10%; opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { top: 82%; opacity: 0; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 30px 4px  rgba(139, 92, 246, 0.35),
+      0 0 80px 10px rgba(139, 92, 246, 0.15),
+      inset 0 0 30px 0 rgba(139, 92, 246, 0.04);
+  }
+  50% {
+    box-shadow:
+      0 0 65px 20px rgba(139, 92, 246, 0.65),
+      0 0 120px 30px rgba(139, 92, 246, 0.30),
+      inset 0 0 40px 0 rgba(139, 92, 246, 0.08);
+  }
+}
+
+@keyframes flow-line {
+  0%   { stroke-dashoffset: 48; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.animate-float      { animation: float      5s   ease-in-out infinite; }
+.animate-scan-beam  { animation: scan-beam  3.5s ease-in-out infinite; }
+.animate-glow-pulse { animation: glow-pulse 3s   ease-in-out infinite; }
+.animate-flow-line  { animation: flow-line  1.8s linear      infinite; }
