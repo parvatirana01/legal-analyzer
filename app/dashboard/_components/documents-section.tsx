@@ -9,7 +9,7 @@ import {
   SlidersHorizontal,
   FileX,
 } from "lucide-react";
-import { DocumentCard, type DocumentCardData } from "@/components/document-card";
+import { DocumentCard, type DocumentCardData } from "./document-card";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
