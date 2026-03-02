@@ -2,17 +2,22 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Navbar, type NavbarUser } from "@/components/navbar";
 import {
   AlertCircle,
   CheckCircle,
   ChevronDown,
   ChevronRight,
+  Download,
   FileText,
+  Loader2,
   MessageSquare,
+  RefreshCw,
   RotateCcw,
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   TrendingDown,
   TrendingUp,
   Users,
@@ -288,8 +293,26 @@ export default function DocumentResultsPage() {
   const [doc, setDoc] = useState<DocumentData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [elMode, setElMode] = useState(false); // "Explain Like I'm 15"
+  const [elMode, setElMode] = useState(false);
   const [pollTimedOut, setPollTimedOut] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [navUser, setNavUser] = useState<NavbarUser | null>(null);
+  const [tokensRemaining, setTokensRemaining] = useState<number | null>(null);
+
+  // Fetch fresh user data for navbar on mount
+  useEffect(() => {
+    fetch("/api/user/me")
+      .then((r) => r.json())
+      .then((data: { user?: NavbarUser }) => {
+        if (data.user) {
+          setNavUser(data.user);
+          setTokensRemaining(data.user.tokensRemaining);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // ── Polling ────────────────────────────────────────────────────────────────
 
@@ -382,11 +405,64 @@ export default function DocumentResultsPage() {
     }
   };
 
+  // ── Delete handler ─────────────────────────────────────────────────────────
+
+  const handleDelete = async () => {
+    if (!documentId) return;
+    if (!confirm("Delete this document? This cannot be undone.")) return;
+    setIsDeleting(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/documents/${documentId}/delete`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        setActionError(data.error ?? "Delete failed.");
+        return;
+      }
+      router.push("/dashboard");
+    } catch {
+      setActionError("Network error. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // ── Re-analyze handler ──────────────────────────────────────────────────────
+
+  const handleReanalyze = async () => {
+    if (!documentId) return;
+    if (!confirm("Re-analyze this document? This will deduct 1 token.")) return;
+    setIsReanalyzing(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/documents/${documentId}/reanalyze`, {
+        method: "POST",
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setActionError(data.error ?? "Re-analysis failed.");
+        return;
+      }
+      setDoc((prev) => (prev ? { ...prev, status: "PROCESSING" } : prev));
+      setPollTimedOut(false);
+      // Decrement token display immediately (optimistic)
+      setTokensRemaining((prev) =>
+        prev !== null ? Math.max(0, prev - 1) : null
+      );
+    } catch {
+      setActionError("Network error. Please try again.");
+    } finally {
+      setIsReanalyzing(false);
+    }
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   if (error) {
     return (
-      <PageShell>
+      <PageShell navUser={navUser} tokensRemaining={tokensRemaining}>
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <AlertCircle className="mb-4 h-12 w-12 text-red-400" />
           <h2 className="mb-2 text-xl font-bold text-white">Something went wrong</h2>
@@ -404,7 +480,7 @@ export default function DocumentResultsPage() {
 
   if (!doc) {
     return (
-      <PageShell>
+      <PageShell navUser={navUser} tokensRemaining={tokensRemaining}>
         <ProcessingView />
       </PageShell>
     );
@@ -413,7 +489,7 @@ export default function DocumentResultsPage() {
   if (doc.status === "UPLOADED" || doc.status === "PROCESSING") {
     if (pollTimedOut) {
       return (
-        <PageShell fileName={doc.fileName}>
+        <PageShell fileName={doc.fileName} navUser={navUser} tokensRemaining={tokensRemaining}>
           <FailedView
             error="Analysis is taking longer than expected. This can happen after a server restart. Click Retry to re-run the analysis."
             onRetry={handleRetry}
@@ -423,7 +499,7 @@ export default function DocumentResultsPage() {
       );
     }
     return (
-      <PageShell fileName={doc.fileName}>
+      <PageShell fileName={doc.fileName} navUser={navUser} tokensRemaining={tokensRemaining}>
         <ProcessingView />
       </PageShell>
     );
@@ -434,8 +510,37 @@ export default function DocumentResultsPage() {
       (doc.overallAnalysis?.error as string | undefined) ??
       "Analysis could not be completed. Please try again.";
     return (
-      <PageShell fileName={doc.fileName}>
+      <PageShell fileName={doc.fileName} navUser={navUser} tokensRemaining={tokensRemaining}>
         <FailedView error={errMsg} onRetry={handleRetry} isRetrying={isRetrying} />
+        <div className="mt-4 flex justify-center gap-3">
+          <button
+            onClick={handleReanalyze}
+            disabled={isReanalyzing}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/60 transition-all hover:border-violet-500/30 hover:text-violet-300 disabled:opacity-50"
+          >
+            {isReanalyzing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            Re-analyze (new token)
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/60 transition-all hover:border-red-500/30 hover:text-red-400 disabled:opacity-50"
+          >
+            {isDeleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+            Delete
+          </button>
+        </div>
+        {actionError && (
+          <p className="mt-3 text-center text-xs text-red-400">{actionError}</p>
+        )}
       </PageShell>
     );
   }
@@ -452,7 +557,7 @@ export default function DocumentResultsPage() {
   const mediumClauses = doc.clauses.filter((c) => c.riskLevel === "MEDIUM").length;
 
   return (
-    <PageShell fileName={doc.fileName}>
+    <PageShell fileName={doc.fileName} navUser={navUser} tokensRemaining={tokensRemaining}>
       {/* ── Header row ── */}
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -474,7 +579,11 @@ export default function DocumentResultsPage() {
           )}
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2">
+          {actionError && (
+            <p className="w-full text-xs text-red-400">{actionError}</p>
+          )}
+
           <button
             onClick={() => setElMode((v) => !v)}
             className={`rounded-xl border px-4 py-2 text-xs font-semibold transition-all ${
@@ -486,12 +595,57 @@ export default function DocumentResultsPage() {
           >
             🧒 ELI15
           </button>
+
+          <button
+            onClick={() => router.push(`/documents/${documentId}/chat`)}
+            className="inline-flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-xs font-semibold text-violet-300 transition-all hover:border-violet-500/50 hover:bg-violet-500/20"
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Chat
+          </button>
+
+          <a
+            href={`/api/documents/${documentId}/download`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/60 transition-all hover:border-white/20 hover:text-white"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </a>
+
+          <button
+            onClick={handleReanalyze}
+            disabled={isReanalyzing}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/60 transition-all hover:border-violet-500/30 hover:text-violet-300 disabled:opacity-50"
+          >
+            {isReanalyzing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            Re-analyze
+          </button>
+
+          <button
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/60 transition-all hover:border-red-500/30 hover:text-red-400 disabled:opacity-50"
+          >
+            {isDeleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+            Delete
+          </button>
+
           <button
             onClick={() => router.push(`/documents/${documentId}/chat`)}
             className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 transition-all"
           >
             <MessageSquare className="h-4 w-4" />
-            Chat With Document
+            Chat
           </button>
         </div>
       </div>
@@ -623,30 +777,26 @@ export default function DocumentResultsPage() {
 function PageShell({
   children,
   fileName,
+  navUser,
+  tokensRemaining,
 }: {
   children: React.ReactNode;
   fileName?: string;
+  navUser?: NavbarUser | null;
+  tokensRemaining?: number | null;
 }) {
-  const router = useRouter();
+  const breadcrumbs = [
+    { label: "Dashboard", href: "/dashboard" },
+    ...(fileName ? [{ label: fileName }] : []),
+  ];
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
-      <header className="border-b border-white/5 bg-[#0a0a0f]/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="text-lg font-semibold tracking-tight hover:opacity-80 transition-opacity"
-          >
-            Contract<span className="text-violet-400">IQ</span>
-          </button>
-          {fileName && (
-            <p className="hidden text-sm text-white/40 sm:block truncate max-w-sm">
-              {fileName}
-            </p>
-          )}
-        </div>
-      </header>
-
+      <Navbar
+        initialUser={navUser ?? undefined}
+        tokensOverride={tokensRemaining ?? undefined}
+        breadcrumbs={breadcrumbs}
+      />
       <main className="mx-auto max-w-5xl px-6 py-10">{children}</main>
     </div>
   );

@@ -117,6 +117,9 @@ model Document {
   overallAnalysis  Json?           // structured AI response
 
   fileChecksum     String?         // SHA-256 hex for duplicate detection
+  processingTimeMs Int?            // pipeline duration in ms
+  aiModelUsed      String?         // e.g. "gemini-2.5-pro"
+  deletedAt        DateTime?       // soft delete — null = active
 
   user             User?           @relation(fields: [userId], references: [id])
   clauses          Clause[]

@@ -9,6 +9,7 @@
  *   5. Calculate smart risk score
  *   6. Persist results + clause records in Postgres
  *   7. Mark document as COMPLETED (or FAILED on error)
+ *   8. Refund token on failure (USER role only)
  *
  * This function is designed to be called fire-and-forget from the upload
  * route — it must never throw unhandled rejections.
@@ -17,10 +18,12 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { r2Client } from "@/lib/r2";
 import { extractText } from "@/lib/extract-text";
-import { analyzeDocument } from "@/lib/gemini";
+import { analyzeDocument, GEMINI_MODEL } from "@/lib/gemini";
 import { calculateRiskScore } from "@/lib/risk-score";
 import { prisma } from "@/lib/prisma";
-import type { RiskLevel } from "@/lib/generated/prisma/enums";
+import { refundToken } from "@/lib/token-manager";
+import { generateAndStoreEmbeddings } from "@/lib/embeddings";
+import type { RiskLevel, UserRole } from "@/lib/generated/prisma/enums";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -56,7 +59,6 @@ async function fetchFileFromR2(key: string): Promise<Buffer> {
     throw new Error(`R2 returned an empty body for key: ${key}`);
   }
 
-  // Body is a ReadableStream in Node.js — collect chunks
   const chunks: Uint8Array[] = [];
   for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
     chunks.push(chunk);
@@ -70,14 +72,20 @@ async function fetchFileFromR2(key: string): Promise<Buffer> {
 /**
  * Run the full AI processing pipeline for a document.
  *
+ * @param documentId  The document to process
+ * @param userId      Optional — used to refund tokens on failure (USER role only)
+ * @param role        Optional — only USER role triggers a refund
+ *
  * Safe to call without `await` — errors are caught and written to the DB.
  */
 export async function processDocument(
-  documentId: string
+  documentId: string,
+  userId?: string | null,
+  role?: UserRole | null
 ): Promise<ProcessDocumentOutcome> {
   const startedAt = Date.now();
 
-  // ── Step 1: Fetch document metadata ────────────────────────────────────────
+  // ── Step 1: Fetch document metadata ──────────────────────────────────────
   let doc: { fileUrl: string; status: string } | null;
   try {
     doc = await prisma.document.findUnique({
@@ -98,10 +106,7 @@ export async function processDocument(
     return { success: false, documentId, error: "Already COMPLETED." };
   }
 
-  // Allow re-processing if stuck in PROCESSING (e.g. server restart mid-pipeline)
-  // The process API already resets status to UPLOADED before calling here for force-retries.
-
-  // ── Step 2: Mark as PROCESSING ─────────────────────────────────────────────
+  // ── Step 2: Mark as PROCESSING ────────────────────────────────────────────
   try {
     await prisma.document.update({
       where: { id: documentId },
@@ -113,11 +118,11 @@ export async function processDocument(
   }
 
   try {
-    // ── Step 3: Fetch file from R2 ──────────────────────────────────────────
+    // ── Step 3: Fetch file from R2 ────────────────────────────────────────
     console.log(`[process] Fetching ${doc.fileUrl} from R2…`);
     const buffer = await fetchFileFromR2(doc.fileUrl);
 
-    // ── Step 4: Determine MIME type from R2 key extension ──────────────────
+    // ── Step 4: Determine MIME type from R2 key extension ─────────────────
     const ext = doc.fileUrl.split(".").pop()?.toLowerCase() ?? "";
     const mimeMap: Record<string, string> = {
       pdf: "application/pdf",
@@ -126,7 +131,7 @@ export async function processDocument(
     };
     const mimeType = mimeMap[ext] ?? "application/pdf";
 
-    // ── Step 5: Extract text ────────────────────────────────────────────────
+    // ── Step 5: Extract text ──────────────────────────────────────────────
     console.log(`[process] Extracting text from ${documentId}…`);
     const { text, truncated } = await extractText(buffer, mimeType);
 
@@ -134,26 +139,27 @@ export async function processDocument(
       console.warn(`[process] Text truncated for ${documentId} — file was very large.`);
     }
 
-    // ── Step 6: Gemini analysis ─────────────────────────────────────────────
+    // ── Step 6: Gemini analysis ───────────────────────────────────────────
     console.log(`[process] Calling Gemini for ${documentId}…`);
     const analysis = await analyzeDocument(text);
 
-    // ── Step 7: Risk score ──────────────────────────────────────────────────
+    // ── Step 7: Risk score ────────────────────────────────────────────────
     const { score, level } = calculateRiskScore(analysis.clauses);
     console.log(`[process] Risk score: ${score} (${level}) for ${documentId}`);
 
-    // ── Step 8: Persist results in a transaction ────────────────────────────
+    const processingMs = Date.now() - startedAt;
+
+    // ── Step 8: Persist results in a transaction ──────────────────────────
     await prisma.$transaction(async (tx) => {
       // Delete any stale clause records (idempotent retry support)
       await tx.clause.deleteMany({ where: { documentId } });
 
-      // Insert new clause records
       if (analysis.clauses.length > 0) {
         await tx.clause.createMany({
           data: analysis.clauses.map((c) => ({
             documentId,
             title: c.title,
-            content: c.summary,      // Clause.content stores the summary
+            content: c.summary,
             riskLevel: c.riskLevel as RiskLevel,
             explanation: c.explanation,
             suggestion: c.suggestion,
@@ -161,24 +167,30 @@ export async function processDocument(
         });
       }
 
-      // Update document with full analysis
       await tx.document.update({
         where: { id: documentId },
         data: {
           status: "COMPLETED",
           summary: analysis.summary,
-          // JSON roundtrip satisfies Prisma's strict InputJsonValue constraint
           pros: JSON.parse(JSON.stringify(analysis.pros)),
           cons: JSON.parse(JSON.stringify(analysis.cons)),
           riskScore: score,
           riskLevel: level as RiskLevel,
           overallAnalysis: JSON.parse(JSON.stringify(analysis)),
+          processingTimeMs: processingMs,
+          aiModelUsed: GEMINI_MODEL,
         },
       });
     });
 
-    const processingMs = Date.now() - startedAt;
     console.log(`[process] Completed ${documentId} in ${processingMs}ms`);
+
+    // ── Step 9: Generate RAG embeddings (best-effort) ─────────────────────
+    try {
+      await generateAndStoreEmbeddings(documentId, text);
+    } catch (embErr) {
+      console.error(`[process] Embedding generation failed for ${documentId}:`, embErr);
+    }
 
     return {
       success: true,
@@ -193,13 +205,12 @@ export async function processDocument(
 
     console.error(`[process] Pipeline failed for ${documentId}:`, err);
 
-    // Mark document as FAILED with error message
+    // Mark document as FAILED
     try {
       await prisma.document.update({
         where: { id: documentId },
         data: {
           status: "FAILED",
-          // Store error in overallAnalysis for debugging
           overallAnalysis: JSON.parse(JSON.stringify({ error: message })),
         },
       });
@@ -207,7 +218,16 @@ export async function processDocument(
       console.error(`[process] Failed to mark FAILED for ${documentId}:`, dbErr);
     }
 
+    // Refund token for USER role (best-effort — don't crash on refund failure)
+    if (userId && role === "USER") {
+      try {
+        await refundToken(userId, documentId);
+        console.log(`[process] Token refunded for user ${userId} (doc ${documentId})`);
+      } catch (refundErr) {
+        console.error(`[process] Token refund failed for ${documentId}:`, refundErr);
+      }
+    }
+
     return { success: false, documentId, error: message };
   }
 }
-
