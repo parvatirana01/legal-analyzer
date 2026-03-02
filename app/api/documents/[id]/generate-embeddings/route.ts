@@ -110,7 +110,14 @@ export async function POST(
     const fileBuffer = Buffer.concat(chunks);
 
     // ── Extract text ────────────────────────────────────────────────────────
-    const text = await extractText(fileBuffer, doc.fileName);
+    const ext = doc.fileUrl.split(".").pop()?.toLowerCase() ?? "";
+    const mimeMap: Record<string, string> = {
+      pdf: "application/pdf",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      doc: "application/msword",
+    };
+    const mimeType = mimeMap[ext] ?? "application/pdf";
+    const { text } = await extractText(fileBuffer, mimeType);
 
     if (!text.trim()) {
       return NextResponse.json(

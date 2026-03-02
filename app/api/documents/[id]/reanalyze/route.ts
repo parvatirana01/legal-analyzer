@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { processDocument } from "@/lib/process-document";
 import { deductTokenForAnalysis } from "@/lib/token-manager";
 import type { UserRole } from "@/lib/generated/prisma/enums";
@@ -49,7 +50,7 @@ export async function POST(
   }
 
   // ── Token deduction ────────────────────────────────────────────────────────
-  const role = (session.user.role ?? "USER") as UserRole;
+  const role = (session?.user?.role ?? "USER") as UserRole;
   const tokenResult = await deductTokenForAnalysis(userId, role, documentId);
 
   if (!tokenResult.allowed) {
@@ -66,9 +67,9 @@ export async function POST(
         riskScore: null,
         riskLevel: null,
         summary: null,
-        pros: null,
-        cons: null,
-        overallAnalysis: null,
+        pros: Prisma.DbNull,
+        cons: Prisma.DbNull,
+        overallAnalysis: Prisma.DbNull,
         processingTimeMs: null,
         aiModelUsed: null,
       },
