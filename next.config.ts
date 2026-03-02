@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+
+  // Turbopack (default in Next.js 16) — silence the no-config warning.
+  // react-pdf's optional "canvas" peer dep is not installed; Turbopack
+  // skips missing optional native modules without an alias.
+  turbopack: {},
 };
 
 export default nextConfig;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   FileText,
   FileType,
@@ -39,6 +40,7 @@ const ACCEPTED_EXTENSIONS = ".pdf,.doc,.docx";
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function UploadDocument({ role = "GUEST" }: UploadDocumentProps) {
+  const router = useRouter();
   const [state, setState] = useState<UploadState>({ phase: "idle" });
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -179,7 +181,7 @@ export function UploadDocument({ role = "GUEST" }: UploadDocumentProps) {
             <button
               className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-violet-500 active:scale-95"
               onClick={() => {
-                window.location.href = `/documents/${state.phase === "success" ? state.documentId : ""}`;
+                if (state.phase === "success") router.push(`/documents/${state.documentId}`);
               }}
             >
               Start Analysis
@@ -209,7 +211,7 @@ export function UploadDocument({ role = "GUEST" }: UploadDocumentProps) {
             <button
               className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-amber-500"
               onClick={() => {
-                window.location.href = `/documents/${state.documentId}`;
+                router.push(`/documents/${state.documentId}`);
               }}
             >
               Open Existing

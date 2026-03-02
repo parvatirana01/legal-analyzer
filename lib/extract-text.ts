@@ -1,12 +1,5 @@
 import mammoth from "mammoth";
-
-// pdf-parse is a CommonJS module; require() bypasses the ESM resolver issue
-// that occurs with moduleResolution: "bundler"
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse") as (
-  dataBuffer: Buffer,
-  options?: Record<string, unknown>
-) => Promise<{ text: string; numpages: number; info: Record<string, unknown> }>;
+import { PDFParse } from "pdf-parse";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -48,17 +41,21 @@ function truncateSafely(text: string, maxLength: number): string {
 // ── PDF extraction ────────────────────────────────────────────────────────────
 
 async function extractFromPdf(buffer: Buffer): Promise<string> {
-  let data: { text: string; numpages: number; info: Record<string, unknown> };
+  let rawText: string;
 
   try {
-    data = await pdfParse(buffer);
+    // pdf-parse v2 uses a class-based API: new PDFParse({ data }) → .getText()
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+    await parser.destroy();
+    rawText = result.text;
   } catch (err) {
     throw new Error(
       `PDF parsing failed: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 
-  const text = cleanText(data.text);
+  const text = cleanText(rawText);
   if (!text) {
     throw new Error(
       "No readable text could be extracted from the PDF. " +

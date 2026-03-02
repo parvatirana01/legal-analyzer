@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { processDocument } from "@/lib/process-document";
+import type { UserRole } from "@/lib/generated/prisma/enums";
 
 // ── POST /api/process/[id] ────────────────────────────────────────────────────
 //
@@ -35,9 +36,14 @@ export async function POST(
     internalSecret === process.env.INTERNAL_API_SECRET &&
     !!process.env.INTERNAL_API_SECRET;
 
+  let processUserId: string | null = null;
+  let processRole: UserRole | null = null;
+
   if (!isInternal) {
     const session = await auth();
     const userId = session?.user?.id ?? null;
+    processUserId = userId;
+    processRole = (session?.user?.role ?? null) as UserRole | null;
 
     // Resolve guest session for unauthenticated users
     let guestSessionId: string | null = null;
@@ -52,7 +58,7 @@ export async function POST(
 
     // Verify ownership (auth user OR guest)
     const doc = await prisma.document.findUnique({
-      where: { id: documentId },
+      where: { id: documentId, deletedAt: null },
       select: { userId: true, guestSessionId: true, status: true, updatedAt: true },
     });
 
@@ -76,7 +82,6 @@ export async function POST(
     }
 
     // Allow force-retry if stuck in PROCESSING for more than 3 minutes
-    // (happens when the server restarts mid-pipeline)
     if (doc.status === "PROCESSING") {
       const stuckThresholdMs = 3 * 60 * 1000;
       const isStuck = Date.now() - new Date(doc.updatedAt).getTime() > stuckThresholdMs;
@@ -86,7 +91,6 @@ export async function POST(
           { status: 202 }
         );
       }
-      // Reset stuck document so the pipeline can re-run it
       await prisma.document.update({
         where: { id: documentId },
         data: { status: "UPLOADED" },
@@ -95,8 +99,7 @@ export async function POST(
   }
 
   // ── Fire and forget ────────────────────────────────────────────────────────
-  // We deliberately do NOT await this — return 202 Accepted immediately.
-  processDocument(documentId).catch((err: unknown) => {
+  processDocument(documentId, processUserId, processRole).catch((err: unknown) => {
     console.error(`[api/process] Unhandled error for ${documentId}:`, err);
   });
 
