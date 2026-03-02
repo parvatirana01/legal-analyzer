@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserDocuments } from "@/lib/document-service";
 import { Navbar } from "@/components/navbar";
-import { UploadDocument } from "@/components/upload-document";
+import { UploadDocument } from "@/app/dashboard/_components/upload-document";
 import { DocumentsSection } from "@/app/dashboard/_components/documents-section";
 import { ShieldCheck, Coins, FileText } from "lucide-react";
 import Image from "next/image";

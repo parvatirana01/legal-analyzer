@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 
 // `ssr: false` is only valid inside a Client Component
 const PdfViewerDynamic = dynamic(
-  () => import("@/components/PdfViewer").then((m) => m.PdfViewer),
+  () => import("./pdf-viewer").then((m) => m.PdfViewer),
   {
     ssr: false,
     loading: () => (

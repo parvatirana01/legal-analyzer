@@ -165,11 +165,7 @@ function TypingDots() {
 
 // ── Message bubble ────────────────────────────────────────────────────────────
 
-function MessageBubble({
-  message,
-}: {
-  message: ChatMessage;
-}) {
+function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "USER";
 
   return (
@@ -179,9 +175,7 @@ function MessageBubble({
       {/* Avatar */}
       <div
         className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${
-          isUser
-            ? "bg-violet-600/30"
-            : "bg-sky-600/20"
+          isUser ? "bg-violet-600/30" : "bg-sky-600/20"
         }`}
       >
         {isUser ? (
@@ -207,9 +201,7 @@ function MessageBubble({
 
         {/* Copy button (non-streaming only) */}
         {!message.isStreaming && message.content && (
-          <div
-            className={`mt-1 flex ${isUser ? "justify-start" : "justify-end"}`}
-          >
+          <div className={`mt-1 flex ${isUser ? "justify-start" : "justify-end"}`}>
             <CopyButton text={message.content} />
           </div>
         )}
@@ -249,6 +241,9 @@ export function ChatPanel({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // suppress unused variable warning
+  void isLoading;
+
   const isUnlimited = userRole === "SUBSCRIBER" || userRole === "ADMIN";
   const limitReached =
     !isUnlimited && messageLimit !== null && userMessageCount >= messageLimit;
@@ -261,7 +256,6 @@ export function ChatPanel({
     async function ensureEmbeddings() {
       setEmbeddingStatus("checking");
       try {
-        // Check if embeddings already exist (POST with no ?force returns fast if they do)
         const checkRes = await fetch(
           `/api/documents/${documentId}/generate-embeddings`,
           { method: "POST" }
@@ -269,18 +263,15 @@ export function ChatPanel({
         const checkData = await checkRes.json() as { success?: boolean; message?: string; count?: number };
 
         if (checkRes.ok && !checkData.success) {
-          // Already existed — message says "Embeddings already exist."
           setEmbeddingStatus("ready");
           return;
         }
 
         if (checkRes.ok && checkData.success) {
-          // Just generated — done
           setEmbeddingStatus("ready");
           return;
         }
 
-        // Non-OK response → try to generate
         setEmbeddingStatus("generating");
         const genRes = await fetch(
           `/api/documents/${documentId}/generate-embeddings?force=true`,
@@ -376,12 +367,8 @@ export function ChatPanel({
       setError(null);
       setIsStreaming(true);
 
-      // Optimistically increment message count
       const newCount = userMessageCount + 1;
       setUserMessageCount(newCount);
-      if (messageLimit !== null && newCount >= messageLimit) {
-        // Will show modal after this message completes
-      }
 
       abortRef.current = new AbortController();
 
@@ -401,12 +388,11 @@ export function ChatPanel({
 
           if (errorData.code === "LIMIT_EXCEEDED") {
             setShowUpgradeModal(true);
-            setUserMessageCount((prev) => prev - 1); // rollback
+            setUserMessageCount((prev) => prev - 1);
           } else {
             setError(errorData.error ?? "Something went wrong.");
           }
 
-          // Remove the streaming assistant message
           setMessages((prev) => prev.filter((m) => m.id !== assistantMsg.id));
           return;
         }
@@ -435,7 +421,6 @@ export function ChatPanel({
           );
         }
 
-        // Mark streaming complete
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsg.id
@@ -444,7 +429,6 @@ export function ChatPanel({
           )
         );
 
-        // Show upgrade modal if limit now reached
         if (!isUnlimited && messageLimit !== null && newCount >= messageLimit) {
           setTimeout(() => setShowUpgradeModal(true), 800);
         }
@@ -454,7 +438,7 @@ export function ChatPanel({
         console.error("[ChatPanel] Stream error:", err);
         setError("Failed to get a response. Please try again.");
         setMessages((prev) => prev.filter((m) => m.id !== assistantMsg.id));
-        setUserMessageCount((prev) => Math.max(0, prev - 1)); // rollback
+        setUserMessageCount((prev) => Math.max(0, prev - 1));
       } finally {
         setIsStreaming(false);
         abortRef.current = null;
