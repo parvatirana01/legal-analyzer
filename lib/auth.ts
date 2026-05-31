@@ -3,13 +3,18 @@
  * Imports Prisma for user upsert. NOT used in middleware.
  */
 import NextAuth from "next-auth";
+import { PrismaAdapter } from "@auth/prisma-adapter";
 import { authConfig } from "@/auth.config";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@/lib/generated/prisma/enums";
 import { resetTokensIfExpired } from "@/lib/tokens";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(prisma),
   ...authConfig,
+  providers: [
+    ...authConfig.providers,
+  ],
 
   callbacks: {
     // Keep the edge-safe callbacks from authConfig
