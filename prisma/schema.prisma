@@ -55,21 +55,24 @@ enum ChatRole {
 //////////////////////////////////////
 
 model User {
-  id                 String         @id @default(uuid())
-  email              String?        @unique
-  name               String?
-  image              String?
-  role               UserRole       @default(USER)
+  id            String    @id @default(uuid())
+  email         String?   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  role          UserRole  @default(USER)
 
-  tokensRemaining    Int            @default(3)
-  tokensResetDate    DateTime?
+  tokensRemaining Int       @default(3)
+  tokensResetDate DateTime?
 
-  subscription       Subscription?
-  documents          Document[]
-  tokenTransactions  TokenTransaction[]
+  subscription      Subscription?
+  documents         Document[]
+  tokenTransactions TokenTransaction[]
+  accounts          Account[]
+  sessions          Session[]
 
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////
@@ -77,19 +80,19 @@ model User {
 //////////////////////////////////////
 
 model Subscription {
-  id            String            @id @default(uuid())
-  userId        String            @unique
-  plan          SubscriptionPlan  @default(FREE)
-  active        Boolean           @default(false)
-  startDate     DateTime?
-  endDate       DateTime?
+  id        String           @id @default(uuid())
+  userId    String           @unique
+  plan      SubscriptionPlan @default(FREE)
+  active    Boolean          @default(false)
+  startDate DateTime?
+  endDate   DateTime?
 
-  stripeSubId   String?           // if using Stripe later
+  stripeSubId String? // if using Stripe later
 
-  user          User              @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////
@@ -97,37 +100,37 @@ model Subscription {
 //////////////////////////////////////
 
 model Document {
-  id               String          @id @default(uuid())
-  userId           String?
-  guestSessionId   String?         // for non-logged users
+  id             String  @id @default(uuid())
+  userId         String?
+  guestSessionId String? // for non-logged users
 
-  fileName         String
-  fileUrl          String
-  fileSize         Int?
+  fileName String
+  fileUrl  String
+  fileSize Int?
 
-  status           DocumentStatus  @default(UPLOADED)
+  status DocumentStatus @default(UPLOADED)
 
-  riskScore        Int?
-  riskLevel        RiskLevel?
+  riskScore Int?
+  riskLevel RiskLevel?
 
-  summary          String?
-  pros             Json?
-  cons             Json?
+  summary String?
+  pros    Json?
+  cons    Json?
 
-  overallAnalysis  Json?           // structured AI response
+  overallAnalysis Json? // structured AI response
 
-  fileChecksum     String?         // SHA-256 hex for duplicate detection
-  processingTimeMs Int?            // pipeline duration in ms
-  aiModelUsed      String?         // e.g. "gemini-2.5-pro"
-  deletedAt        DateTime?       // soft delete — null = active
+  fileChecksum     String? // SHA-256 hex for duplicate detection
+  processingTimeMs Int? // pipeline duration in ms
+  aiModelUsed      String? // e.g. "gemini-2.5-pro"
+  deletedAt        DateTime? // soft delete — null = active
 
-  user             User?           @relation(fields: [userId], references: [id])
-  clauses          Clause[]
-  chats            ChatMessage[]
-  embeddings       DocumentEmbedding[]
+  user       User?               @relation(fields: [userId], references: [id])
+  clauses    Clause[]
+  chats      ChatMessage[]
+  embeddings DocumentEmbedding[]
 
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////
@@ -135,8 +138,8 @@ model Document {
 //////////////////////////////////////
 
 model Clause {
-  id          String     @id @default(uuid())
-  documentId  String
+  id         String @id @default(uuid())
+  documentId String
 
   title       String?
   content     String
@@ -144,25 +147,28 @@ model Clause {
   explanation String?
   suggestion  String?
 
-  document    Document   @relation(fields: [documentId], references: [id])
+  document Document @relation(fields: [documentId], references: [id])
 
-  createdAt   DateTime   @default(now())
+  createdAt DateTime @default(now())
 }
 
 //////////////////////////////////////
 // DOCUMENT EMBEDDINGS (pgvector)
+// NOTE: This model requires the pgvector extension to be installed in your PostgreSQL database.
+// The datasource block above must include `extensions = [pgvector(map: "vector")]` and the 
+// `postgresqlExtensions` preview feature must be enabled to support the `Unsupported("vector")` type below.
 //////////////////////////////////////
 
 model DocumentEmbedding {
-  id          String   @id @default(uuid())
-  documentId  String
-  content     String
+  id         String @id @default(uuid())
+  documentId String
+  content    String
 
-  embedding   Unsupported("vector")?
+  embedding Unsupported("vector")?
 
-  document    Document @relation(fields: [documentId], references: [id])
+  document Document @relation(fields: [documentId], references: [id])
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 //////////////////////////////////////
@@ -170,15 +176,15 @@ model DocumentEmbedding {
 //////////////////////////////////////
 
 model ChatMessage {
-  id          String    @id @default(uuid())
-  documentId  String
+  id         String @id @default(uuid())
+  documentId String
 
-  role        ChatRole
-  content     String
+  role    ChatRole
+  content String
 
-  document    Document  @relation(fields: [documentId], references: [id])
+  document Document @relation(fields: [documentId], references: [id])
 
-  createdAt   DateTime  @default(now())
+  createdAt DateTime @default(now())
 }
 
 //////////////////////////////////////
@@ -186,15 +192,52 @@ model ChatMessage {
 //////////////////////////////////////
 
 model TokenTransaction {
-  id          String   @id @default(uuid())
-  userId      String
+  id     String @id @default(uuid())
+  userId String
 
-  amount      Int      // -1 for usage, +3 for monthly reset etc
-  reason      String   // "DOCUMENT_UPLOAD", "MONTHLY_RESET"
-  
-  user        User     @relation(fields: [userId], references: [id])
+  amount Int // -1 for usage, +3 for monthly reset etc
+  reason String // "DOCUMENT_UPLOAD", "MONTHLY_RESET"
 
-  createdAt   DateTime @default(now())
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
 }
 
+//////////////////////////////////////
+// NEXTAUTH REQUIRED MODELS
+//////////////////////////////////////
 
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}

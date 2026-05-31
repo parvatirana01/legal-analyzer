@@ -9,7 +9,7 @@ export function SignInButton() {
     return (
       <button
         onClick={() => signOut({ callbackUrl: "/" })}
-        className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20"
+        className="text-[14px] text-white bg-[#15803D] px-3.5 py-1.5 rounded-md font-medium inline-flex items-center font-lato"
       >
         Sign Out
       </button>
@@ -19,7 +19,7 @@ export function SignInButton() {
   return (
     <button
       onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-      className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20"
+      className="text-[14px] text-white bg-[#15803D] px-3.5 py-1.5 rounded-md font-medium inline-flex items-center gap-2 font-lato"
     >
       <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
         <path

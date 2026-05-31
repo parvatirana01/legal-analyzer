@@ -4,7 +4,8 @@
  */
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
-import type { UserRole } from "@/lib/generated/prisma/enums";
+
+type UserRole = "GUEST" | "USER" | "SUBSCRIBER" | "ADMIN";
 
 export const authConfig: NextAuthConfig = {
   providers: [
@@ -32,7 +33,17 @@ export const authConfig: NextAuthConfig = {
       const isAuthenticated = !!auth?.user;
       const pathname = nextUrl.pathname;
 
-      if (pathname.startsWith("/dashboard")) return isAuthenticated;
+      // Allow NextAuth APIs to pass through
+      if (pathname.startsWith("/api/auth")) return true;
+
+      // Protect all other APIs, dashboard, and documents
+      if (
+        pathname.startsWith("/api") ||
+        pathname.startsWith("/dashboard") ||
+        pathname.startsWith("/documents")
+      ) {
+        return isAuthenticated;
+      }
 
       if (pathname.startsWith("/admin")) {
         return isAuthenticated && auth?.user?.role === "ADMIN";
